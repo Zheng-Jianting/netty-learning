@@ -539,3 +539,133 @@ ByteBuffer sliceBuffer = buffer.slice();
 
 <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513230519270.png" alt="image-20220513230519270" style="zoom:80%;" />
 
+### 4. 字节缓冲区
+
+#### 4.1 字节顺序
+
+每个基本数据类型都是以连续字节序列的形式存储在内存中，多字节数值被存储在内存中的方式一般被称为 endian-ness ( 字节顺序 )，例如，32 位的 int 值 0x037fb4c7 在内存中有以下两种排列顺序：
+
+- 大端字节顺序：数值的最高字节 —— big end ( 大端 )，位于低位内存地址
+
+  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220514162032391.png" alt="image-20220514162032391" style="zoom:80%;" />
+
+- 小端字节顺序：数值的最低字节优先保存在内存中
+
+  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220514162102922.png" alt="image-20220514162102922" style="zoom:80%;" />
+
+IP 协议规定了使用大端的网络字节顺序，所有在 IP 分组报文中的多字节数值必须先在本地主机字节顺序和通用的网络字节顺序之间进行转换
+
+在 Java NIO 中，字节顺序由 ByteOrder 类封装：
+
+```java
+public final class ByteOrder {
+    private String name;
+
+    private ByteOrder(String name) {
+        this.name = name;
+    }
+    
+    public static final ByteOrder BIG_ENDIAN = new ByteOrder("BIG_ENDIAN");
+    
+    public static final ByteOrder LITTLE_ENDIAN = new ByteOrder("LITTLE_ENDIAN");
+    
+    public static ByteOrder nativeOrder() {
+        return Bits.byteOrder();
+    }
+    
+    public String toString() {
+        return name;
+    }
+}
+```
+
+ByteOrder 类定义了从缓冲区中存储或检索多字节数值时使用哪一种字节顺序，其中 _nativeOrder()_ 静态函数返回 JVM 运行的硬件平台的固有字节顺序
+
+- 通过 _allocate()_ 或者 _wrap()_ 创建的除了 ByteOrder 之外的其它缓冲区类，字节顺序是一个只读属性，_order()_ 返回与 ByteOrder.nativeOrder() 相同的值
+- ByteBuffer 类有所不同：默认的字节顺序总是 ByteOrder.BIG_ENDIAN，无论 JVM 运行的硬件平台的固有字节顺序是什么，此外，ByteBuffer 的字节顺序可以通过调用 _order(ByteOrder bo)_ 来改变
+
+#### 4.2 直接缓冲区
+
+```java
+public abstract class ByteBuffer extends Buffer implements Comparable<ByteBuffer> {
+    public static ByteBuffer allocateDirect(int capacity) {
+        return new DirectByteBuffer(capacity);
+    }
+    
+    public abstract boolean isDirect();
+}
+```
+
+#### 4.3 视图缓冲区
+
+下面列出的每一个工厂方法都在原有的 ByteBuffer 对象上创建一个视图缓冲区，调用其中的任何一个方法都会创建对应的缓冲区类型对象，新的缓冲区对象维护它们自己的位置信息，但是和原来的缓冲区共享数据元素
+
+```java
+public abstract class ByteBuffer extends Buffer implements Comparable<ByteBuffer> {
+    public abstract CharBuffer asCharBuffer();
+    public abstract ShortBuffer asShortBuffer();
+    public abstract IntBuffer asIntBuffer();
+    public abstract LongBuffer asLongBuffer();
+    public abstract FloatBuffer asFloatBuffer();
+    public abstract DoubleBuffer asDoubleBuffer();
+}
+```
+
+类似于 _slice()_ 函数，新的缓冲区是原始缓冲区的一个切分，其位置信息由原始缓冲区决定，新的缓冲区 mark = -1，position = 0，limit 和 capacity 为原始缓冲区中的元素数量除以相应的数据类型的字节数，以 HeapByteBuffer 为例，新的缓冲区的 limit 和 capacity 为下面代码中的 size，其中右移一位表示 Char 类型为 2 字节
+
+```java
+class HeapByteBuffer extends ByteBuffer {
+    public CharBuffer asCharBuffer() {
+        int pos = position();
+        int size = (limit() - pos) >> 1;
+        int off = offset + pos;
+        return (bigEndian
+                ? (CharBuffer)(new ByteBufferAsCharBufferB(this,
+                                                               -1,
+                                                               0,
+                                                               size,
+                                                               size,
+                                                               off))
+                : (CharBuffer)(new ByteBufferAsCharBufferL(this,
+                                                               -1,
+                                                               0,
+                                                               size,
+                                                               size,
+                                                               off)));
+    }
+}
+```
+
+下面的代码创建了一个 ByteBuffer 缓冲区的 CharBuffer 视图：
+
+```java
+ByteBuffer byteBuffer = ByteBuffer.allocate(7).order(ByteOrder.BIG_ENDIAN);
+CharBuffer charBuffer = byteBuffer.asCharBuffer();
+```
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220514173049704.png" alt="image-20220514173049704" style="zoom:80%;" />
+
+当一个视图缓冲区被创建时，视图会继承原始 ByteBuffer 对象的字节顺序，这个视图的字节顺序不能再被修改，字节顺序决定了 ByteBuffer 中的字节是以什么顺序被组合成 Char 变量的
+
+#### 4.4 数据元素视图
+
+ByteBuffer 类为每一种原始数据类型提供了相应的 _get()_ 和 _put()_ 方法：
+
+```java
+public abstract class ByteBuffer extends Buffer implements Comparable<ByteBuffer> {
+    public abstract char getChar();
+    public abstract char getChar(int index);
+    public abstract short getShort();
+    public abstract short getShort(int index);
+    // ...
+    
+    public abstract ByteBuffer putChar(char value);
+    public abstract ByteBuffer putChar(int index, char value);
+    public abstract ByteBuffer putShort(short value);
+    public abstract ByteBuffer putShort(int index, short value);
+    // ...
+}
+```
+
+以 char 为例，_getChar()_ 从 ByteBuffer 中读取 2 个字节，并根据 ByteBuffer 的字节顺序 ( 大端或小端 ) 转换成 char 变量，并将 position 加 2；_putChar()_ 根据 ByteBuffer 的字节顺序向其中写入一个 char 变量 ( 2 字节 )，并将 position 加 2
+
