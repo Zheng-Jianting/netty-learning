@@ -218,3 +218,126 @@ public interface GatheringByteChannel extends WritableByteChannel {
 }
 ```
 
+### 3. 文件通道
+
+_FileChannel_ 类实现了常用的 read，write 以及 scatter / gather 操作：
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516003924138.png" alt="image-20220516003924138" style="zoom:67%;" />
+
+_FileChannel_ 是一个反映 Java 虚拟机外部的一个具体对象的抽象，其具有以下特定：
+
+- 文件通道总是阻塞式的
+- _FileChannel_ 对象不能直接创建，一个 _FileChannel_ 实例只能通过在一个打开的 file 对象 ( _RandomAccessFile_、_FileInputStream_、_FileOutputStream_ ) 上调用 _getChannel()_ 方法获取，_getChannel()_ 方法会返回一个关联相同文件的 _FileChannel_ 对象，并且该 _FileChannel_ 对象具有与 file 对象相同的访问权限
+- _FileChannel_ 对象是线程安全的
+
+#### 3.1 访问文件
+
+每个 _FileChannel_ 对象都同一个文件描述符 ( file descriptor ) 有一对一的关系，本质上讲，_RandomAccessFile_ 类提供的是同样的抽象内容，在通道出现之前，底层的文件操作都是通过 _RandomAccessFile_ 类的方法来实现的，_FileChannel_ 模拟同样的 I/O 服务，因此它们的 API 自然是很相似的：
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516005024486.png" alt="image-20220516005024486" style="zoom:80%;" />
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516005045603.png" alt="image-20220516005045603" style="zoom:80%;" />
+
+以下是 _FileChannel_ 的部分 API：
+
+```java
+public abstract class FileChannel
+    extends AbstractInterruptibleChannel
+    implements SeekableByteChannel, GatheringByteChannel, ScatteringByteChannel
+{
+    // This is a partial API listing
+    public abstract long position() throws IOException;
+    public abstract FileChannel position(long newPosition) throws IOException;
+    public abstract long size() throws IOException;
+    public abstract FileChannel truncate(long size) throws IOException;
+    public abstract void force(boolean metaData) throws IOException;
+    
+    public abstract int read(ByteBuffer dst) throws IOException;
+    public abstract int read(ByteBuffer dst, long position) throws IOException;
+    public abstract long read(ByteBuffer[] dsts, int offset, int length) throws IOException;
+    public final long read(ByteBuffer[] dsts) throws IOException {
+        return read(dsts, 0, dsts.length);
+    }
+    
+    public abstract int write(ByteBuffer src) throws IOException;
+    public abstract int write(ByteBuffer src, long position) throws IOException;
+    public abstract long write(ByteBuffer[] srcs, int offset, int length) throws IOException;
+    public final long write(ByteBuffer[] srcs) throws IOException {
+        return write(srcs, 0, srcs.length);
+    }
+}
+```
+
+同底层的文件描述符一样，每个 _FileChannel_ 都有一个叫 "file position" 的概念，表示与 _FileChannel_ 相关联的文件的 position，这个 position 值决定文件中哪一处的数据接下来将被读或者写，有两种形式的 _position()_ 方法：
+
+- _position()_ 返回与 _FileChannel_ 相关联的文件的 position
+- _position(long newPosition)_ 将与 _FileChannel_ 相关联的文件的 position 设置为 newPosition，newPosition 允许超过文件尾，但是不会改变文件大小，当 newPosition 超过文件尾时，调用 _read()_ 方法会返回文件尾条件 ( end-of-file indication )，调用 _write()_ 方法会导致文件增长以容纳新字节，但可能会导致文件空洞 ( file hole )
+
+文件空洞：当磁盘上一个文件的分配空间小于它的文件大小时会出现 "文件空洞"，大多数现代文件系统只会为实际写入的数据分配磁盘空间，假如数据被写入到文件中非连续的位置上，这将导致文件出现逻辑上不包含数据的区域 ( 即空洞 )
+
+例如，下述代码将产生有两个空洞的磁盘文件：
+
+```java
+package com.zhengjianting.nio.channel;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+
+public class FileHole {
+    public static void main(String[] args) throws IOException {
+        File temp = File.createTempFile("holy", null);
+        RandomAccessFile file = new RandomAccessFile(temp, "rw");
+        FileChannel channel = file.getChannel();
+
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(100);
+        putData(0, byteBuffer, channel);
+        putData(50000, byteBuffer, channel);
+        putData(5000000, byteBuffer, channel);
+
+        System.out.println("Wrote temp file '" + temp.getPath() + "', size = " + channel.size());
+        channel.close();
+        file.close();
+    }
+
+    public static void putData(int position, ByteBuffer buffer, FileChannel channel) throws IOException {
+        String string = "*<-- location " + position;
+        buffer.clear();
+        buffer.put(string.getBytes(StandardCharsets.US_ASCII));
+        buffer.flip();
+        channel.position(position);
+        channel.write(buffer);
+    }
+}
+```
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516142056960.png" alt="image-20220516142056960" style="zoom:80%;" />
+
+当调用 _FileChannel_ 对象的 _read()_ 或 _write()_ 方法时，文件 position 会自动更新，如果 position 值达到了文件大小的值：
+
+- _read()_ 方法会返回一个文件尾条件值 ( -1 )
+- 不同于缓冲区的是，调用 _write()_ 方法时 position 前进到超过文件大小的值，该文件会扩展以容纳新写入的字节
+
+类似于缓冲区，在调用 _read()_ 或 _write()_ 方法时指定 position，不会改变当前文件的 position，当指定的 position 超过文件大小时，可能会导致文件中出现一个空洞
+
+_truncate(long size)_ 方法用于减小文件的大小：
+
+- 如果新 size 小于当前 size，超出新 size 的所有字节会被丢弃
+- 如果新 size 大于或等于当前 size，该文件不会被修改
+
+这两种情况下，文件的 position 都会被设置为所提供的新 size 值
+
+_force(boolean metaData)_ 方法告诉通道强制将全部待定的修改都同步到磁盘的文件上，所有的现代文件系统都会缓存数据和延迟磁盘文件更新以提高性能，例如调用 _channel.write(ByteBuffer src)_ 方法时大致会经过以下过程：
+
+- 进程发起系统调用，向操作系统请求将 ByteBuffer 中的数据写入与 channel 相关联的磁盘文件
+- 操作系统将 ByteBuffer 中的数据从进程缓冲区复制到内核缓冲区
+- 操作系统将内核缓冲区中的数据写入磁盘文件
+
+操作系统为了提高性能，将数据复制到内核缓冲区后可能不会立即写入磁盘文件，而 _force(boolean metaData)_ 方法就是要求位于内核缓冲区的待定修改立即同步到磁盘
+
+boolean 类型的参数 metaData 表示元数据 ( metadata ) 是否要被同步更新到磁盘，元数据指文件所有者、访问权限、最后修改时间等信息
+
+#### 3.2 文件锁定
