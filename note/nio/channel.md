@@ -341,3 +341,190 @@ _force(boolean metaData)_ 方法告诉通道强制将全部待定的修改都同
 boolean 类型的参数 metaData 表示元数据 ( metadata ) 是否要被同步更新到磁盘，元数据指文件所有者、访问权限、最后修改时间等信息
 
 #### 3.2 文件锁定
+
+### 4. 内存映射文件
+
+_FileChannel_ 类提供了 _map()_ 方法，该方法可以在一个打开的文件和一个特殊类型的 _ByteBuffer_ 之间建立一个虚拟内存映射
+
+在 _FileChannel_ 上调用 _map()_ 方法会创建一个由磁盘文件支持的虚拟内存映射 ( virtual memory mapping )，并在那块虚拟内存空间外部封装一个 _MappedByteBuffer_ 对象
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516204127818.png" alt="image-20220516204127818" style="zoom:80%;" />
+
+由 _map()_ 方法返回的 _MappedByteBuffer_ 对象的行为在多数方面类似一个基于内存的缓冲区，只不过该对象的数据元素存储在磁盘上的一个文件中：
+
+- 调用 _get()_ 方法会从磁盘文件中获取数据，此数据反映该文件的当前内容，即使在映射建立之后文件已经被一个外部进程做了修改，通过文件映射看到的数据同您用常规方法读取文件看到的内容是完全一样的
+- 相似的，对映射的缓冲区实现一个 _put()_ 会更新磁盘上的那个文件 ( 假设对该文件有写权限 )，并且您做的修改对于该文件的其他阅读者也是可见的
+
+通过内存映射机制来访问一个文件会比使用常规方法读写高效得多，甚至比使用通道的效率都高，因为不需要做明确的系统调用以及缓冲区拷贝，更重要的是，操作系统的虚拟内存可以自动缓存内存页 ( memory page )，这些页是用系统内存来缓存的，所以不会消耗 Java 虚拟机内存堆 ( memory heap )
+
+内存映射 I/O 使用文件系统建立从用户空间到可用文件系统页的虚拟内存映射，这样做有几个好处：
+
+- 用户进程把文件数据当作内存，所以无需发布 _read()_ 或 _write()_ 系统调用
+- 当用户进程触碰到映射内存空间，会自动产生缺页中断，从而将文件数据从磁盘读进内存；如果用户修改了映射内存空间，相关页会自动标记为脏，随后刷新到磁盘，文件得到更新
+- 操作系统的虚拟内存子系统会对页进行智能高速缓存，自动根据系统负载进行内存管理
+- 数据总是按页对齐的，无需执行缓冲区拷贝
+- 大型文件使用映射，无需耗费大量内存，即可进行数据拷贝
+
+虚拟内存和磁盘 I/O 是紧密关联的，从很多方面看来，它们只是同一件事物的两面
+
+下面让我们看一下如何使用内存映射：
+
+```java
+public abstract class FileChannel
+    extends AbstractInterruptibleChannel
+    implements SeekableByteChannel, GatheringByteChannel, ScatteringByteChannel
+{
+    public static class MapMode {
+        public static final MapMode READ_ONLY = new MapMode("READ_ONLY");
+        public static final MapMode READ_WRITE = new MapMode("READ_WRITE");
+        public static final MapMode PRIVATE = new MapMode("PRIVATE");
+        
+        private final String name;
+        
+        private MapMode(String name) {
+            this.name = name;
+        }
+        
+        public String toString() {
+            return name;
+        }
+    }
+    
+    public abstract MappedByteBuffer map(MapMode mode, long position, long size) throws IOException;
+}
+```
+
+可以看到，只有一种 _map()_ 方法来创建一个文件映射，其中 position 和 size 参数分别表示映射开始的位置，以及映射的长度，因此，我们可以创建一个 _MappedByteBuffer_ 来代表一个文件中字节的某个子范围，例如：
+
+```java
+// 映射文件 [100, 299] 范围的字节
+buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 100, 200);
+
+// 映射整个文件
+buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size());
+```
+
+_FileChannel_ 类中的静态内部类 _MapMode_ 定义了三种映射模式：
+
+- MapMode.READ_ONLY：文件映射是只读的
+- MapMode.READ_WRITE：文件映射是可读写的
+- MapMode.PRIVATE：代表 _MappedByteBuffer_ 是一个写时拷贝 ( copy-on-write ) 的映射，这意味着通过 _put()_ 方法所做的任何修改都会导致一个私有的数据拷贝并且该拷贝中的数据只对 _MappedByteBuffer_ 实例可见，这个过程不会对底层文件做任何修改
+
+使用 MapMode.PRIVATE 映射模式的 _MappedByteBuffer_ 使用 _put()_ 方法所作的修改只对自己可见，并且不会修改底层文件，但是这种映射模式还是可以看到通过其他方式对文件所做的修改，尽管写时拷贝的映射可以防止底层文件被修改，您也必须以 read/write 权限来打开文件以建立 MapMode.PRIVATE 映射，只有这样，返回的 _MappedByteBuffer_ 对象才能允许使用 _put()_ 方法
+
+您应该注意到了没有 _unmap()_ 方法，也就是说，一个映射一旦建立之后将保持有效，直到 _MappedByteBuffer_ 对象被施以垃圾收集动作为止，关闭相关联的 _FileChannel_ 并不会破坏映射
+
+_MappedByteBuffer_ 还定义了几个它独有的方法：
+
+```java
+public abstract class MappedByteBuffer
+    extends ByteBuffer
+{
+    // This is a partial API listing
+    public final MappedByteBuffer load() { ... }
+    public final boolean isLoaded() { ... }
+    public final MappedByteBuffer force() { ... }
+}
+```
+
+当我们为一个文件建立虚拟内存映射之后，文件数据通常不会因此被从磁盘读取到内存 ( 这取决于操作系统 )，虚拟内存系统将根据您的需要来把文件中相应区块的数据读进来，缺页中断需要一定的时间，因为将文件数据读取到内存需要一次或多次的磁盘访问
+
+_load()_ 方法会加载整个文件以使它常驻内存，因此这是一个代价高的操作，它会导致大量的页调入 ( page-in )，具体数量取决于文件中被映射区域的实际大小，然而，_load()_ 方法返回并不能保证文件就会完全常驻内存，这是由于请求页面调入 ( demand paging ) 是动态的，对于那些要求近乎实时访问 ( near-realtime access ) 的程序，解决方案就是预加载
+
+我们可以通过调用 _isLoad()_ 方法来判断一个被映射的文件是否完全常驻内存了：
+
+- 如果返回 true，那么很大概率是映射缓冲区的访问延迟很少或者根本没有延迟
+- 返回 false 并不一定意味着访问缓冲区将很慢或者该文件并未完全常驻内存
+
+_isLoad()_ 方法的返回值只是一个暗示，由于垃圾收集的异步性质、底层操作系统以及运行系统的动态性等因素，想要在任意时刻准确判断全部映射页的状态是不可能的
+
+_force()_ 方法同 _FileChannel_ 对象的同名方法相似，该方法会强制将映射缓冲区上的更改应用到永久磁盘存储器上，当用 _MappedByteBuffer_ 对象来更新一个文件时，应该总是使用 _MappedByteBuffer.force()_ 而非 _FileChannel.force()_，因为通道对象可能不清楚映射缓冲区做出的文件的全部更改
+
+如果映射是以 MapMode.READ_ONLY 或 MAP_MODE.PRIVATE 模式建立的，那么调用 _force()_ 方法将不起任何作用，因为永远不会有更改需要同步到磁盘上 ( 但是这样做也是没有害处的 )
+
+因为 _MappedByteBuffer_ 也是 _ByteBuffer_，所以能够被传递给 _SocketChannel_ 之类通道的 _read()_ 或 _write()_ 方法：
+
+```java
+// 从与 channel 相关联的 I/O 设备 (磁盘文件, socket 等) 中读取数据到 mappedByteBuffer 中
+// 数据写入到 mappedByteBuffer 中也就意味着写入到了被映射的文件
+channel.read(mappedByteBuffer);
+
+// 将 mappedByteBuffer 中的数据写入到与 channel 相关联的 I/O 设备
+// 也就意味着将被映射的文件写入到了与 channel 相关联的 I/O 设备
+channel.write(mappedByteBuffer);
+```
+
+如果再结合 scatter / gather，那么从内存缓冲区和被映射文件内容中组织数据就变得很容易了，下面的例子就是以此方式写 HTTP 回应的：
+
+```java
+package com.zhengjianting.nio.channel;
+
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URLConnection;
+import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+
+public class MappedHttp {
+    private static final String OUTPUT_FILE = "MappedHttp.out";
+    private static final String LINE_SEP = "\r\n";
+    private static final String SERVER_ID = "Server: Ronsoft Dummy Server";
+    private static final String HTTP_HDR = "HTTP/1.0 200 OK" + LINE_SEP + SERVER_ID + LINE_SEP;
+    private static final String HTTP_404_HDR = "HTTP/1.0 404 Not Found" + LINE_SEP + SERVER_ID + LINE_SEP;
+    private static final String MSG_404 = "Could not open file: ";
+
+    public static void main(String[] args) throws Exception {
+        if (args.length < 1) {
+            System.err.println("Usage: filename");
+            return;
+        }
+        String file = args[0];
+        ByteBuffer header = ByteBuffer.wrap(bytes(HTTP_HDR));
+        ByteBuffer dynhdrs = ByteBuffer.allocate(128);
+        ByteBuffer[] gather = { header, dynhdrs, null };
+        long contentLength = -1;
+        String contentType = "unknown/unknown";
+        try {
+            FileInputStream fis = new FileInputStream(file);
+            FileChannel fc = fis.getChannel();
+            MappedByteBuffer fileData = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
+            gather[2] = fileData;
+            contentLength = fc.size();
+            contentType = URLConnection.guessContentTypeFromName(file);
+        } catch (IOException e) {
+            // file could not be opened, report problem
+            ByteBuffer buf = ByteBuffer.allocate(128);
+            String msg = MSG_404 + e + LINE_SEP;
+            buf.put(bytes(msg));
+            buf.flip();
+            // use the HTTP error response
+            gather[0] = ByteBuffer.wrap(bytes(HTTP_404_HDR));
+            gather[2] = buf;
+            contentLength = msg.length();
+            contentType = "text/plain";
+        }
+        StringBuffer sb = new StringBuffer();
+        sb.append("Content-Length: ").append(contentLength);
+        sb.append(LINE_SEP);
+        sb.append("Content-Type: ").append(contentType);
+        sb.append(LINE_SEP).append(LINE_SEP);
+        dynhdrs.put(bytes(sb.toString()));
+        dynhdrs.flip();
+
+        FileOutputStream fos = new FileOutputStream(OUTPUT_FILE);
+        FileChannel out = fos.getChannel();
+        while (out.write(gather) > 0) {
+            // Empty body; loop util all buffers are empty
+        }
+        out.close();
+        System.out.println("output written to: " + OUTPUT_FILE);
+    }
+
+    private static byte[] bytes(String string) {
+        return string.getBytes(StandardCharsets.US_ASCII);
+    }
+}
+```
