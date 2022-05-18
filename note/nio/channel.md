@@ -528,3 +528,60 @@ public class MappedHttp {
     }
 }
 ```
+
+#### 4.1 Channel-to-Channel 传输
+
+由于经常需要从一个位置将文件数据批量传输到另一个位置，_FileChannel_ 类添加了一些优化方法来提高该传输过程的效率：
+
+```java
+public abstract class FileChannel
+    extends AbstractInterruptibleChannel
+    implements SeekableByteChannel, GatheringByteChannel, ScatteringByteChannel
+{
+    public abstract long transferTo(long position, long count, WritableByteChannel target) throws IOException;
+    public abstract long transferFrom(ReadableByteChannel src, long position, long count) throws IOException;
+}
+```
+
+_transferTo()_ 和 _transferFrom()_ 方法允许将一个通道交叉连接到另一个通道，而不需要通过一个中间缓冲区来传递数据
+
+只有 _FileChannel_ 类有这两个方法，因此 channel-to-channel 传输中通道之一必须是 _FileChannel_，例如不能在 socket 通道之间直接传输数据，不过 socket 通道实现了 _WritableByteChannel_ 和 _ReadableByteChannel_ 接口：
+
+- 文件的内容可以用 _transferTo()_ 方法传输给一个 socket 通道
+- 也可以用 _transferFrom()_ 方法将数据从一个 socket 通道直接读取到一个文件中
+
+请求的数据传输将从 position 参数指定的位置开始，传输的字节数不超过 count 参数的值，实际传输的字节数会由方法返回，可能少于请求的字节数
+
+channel-to-channel 传输是可以极其快速的，特别是在底层操作系统提供本地支持的时候，某些操作系统可以不必通过用户空间传递数据而进行直接的数据传输，对于大量的数据传输，这会是一个巨大的帮助
+
+下面的例子以一系列文件作为参数，并将其按序依次传输至一个 WritableByteChannel ( in this case，stdout )：
+
+```java
+package com.zhengjianting.nio.channel;
+
+import java.io.FileInputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.WritableByteChannel;
+
+public class ChannelTransfer {
+    public static void main(String[] args) throws Exception {
+        if (args.length == 0) {
+            System.err.println("Usage: filename ...");
+            return;
+        }
+        catFiles(Channels.newChannel(System.out), args);
+    }
+
+    public static void catFiles(WritableByteChannel target, String[] files) throws Exception {
+        for (String file : files) {
+            FileInputStream fis = new FileInputStream(file);
+            FileChannel channel = fis.getChannel();
+            channel.transferTo(0, channel.size(), target);
+            channel.close();
+            fis.close();
+        }
+    }
+}
+```
+
