@@ -12,7 +12,7 @@
 - 操作系统等待外部数据准备好 ( 例如到达网卡 )，然后将外部数据迁移至内核缓冲区
 - 操作系统将数据从内核缓冲区复制到进程缓冲区
 
-```java
+```tex
 用户空间                         内核空间                            外部设备
   进程                           操作系统                          网卡、磁盘等
  channel
@@ -585,3 +585,226 @@ public class ChannelTransfer {
 }
 ```
 
+### 5. Socket 通道
+
+socket 通道有与文件通道不同的特征：socket 通道类可以运行非阻塞模式并且是可选择的，借助新的 NIO 类，再也没有为每个 socket 连接使用一个线程的必要了，也避免了管理大量线程所需的上下文交换总开销，一个或几个线程就可以管理成百上千的活动 socket 连接了，并且只有很少甚至可能没有性能损失
+
+下面解释一下阻塞模式和非阻塞模式的区别，首先回顾一下在文章开头提到的进程通过系统调用请求外部数据的过程：
+
+```tex
+用户空间                         内核空间                            外部设备
+  进程                           操作系统                          网卡、磁盘等
+ channel
+ buffer
+               1. 系统调用
+               ---------->
+    								2. 将外部数据迁移至内核缓冲区
+    								-------------------------->
+    								<--------------------------
+    	  3. 将数据复制到进程缓冲区
+    	  <----------------------
+```
+
+根据 UNIX 网络编程对 I/O 模型的分类，UNIX 提供了 5 种 I/O 模型，除了异步 I/O 模型，包括阻塞 I/O 模型和非阻塞 I/O 模型在内的其余四种 I/O 模型在第三步将数据从内核复制到用户空间都是阻塞的
+
+阻塞 I/O 模型、非阻塞 I/O 模型、I/O 复用模型、信号驱动 I/O 模型这四种模型的区别主要在于第二步：等待内核准备好外部数据，这里仅介绍阻塞 I/O 模型和非阻塞 I/O 模型，以套接字接口为例：
+
+- 阻塞 I/O 模型：当数据还没到达网卡，或是还没将到达网卡的数据传输至内核，进程都是阻塞的
+
+  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220518175110002.png" alt="image-20220518175110002" style="zoom:67%;" />
+
+- 非阻塞 I/O 模型：与阻塞 I/O 模型不同，当内核没有准备好数据时会直接返回给进程一个 EWOULDBLOCK 错误，一般进程都对进行轮询检查这个状态，查看内核是否准备好数据
+
+  在介绍选择器时我们将了解到如何使用选择器来避免轮询并在异步连接之后收到通知，非阻塞 I/O 和可选择性是紧密相连的
+
+  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220518175143790.png" alt="image-20220518175143790" style="zoom:67%;" />
+
+全部 socket 通道类 ( _DatagramChannel_、_SocketChannel_、_ServerSocketChannel_ ) 都是由位于 java.nio.channels.spi 包中的 _AbstractSelectableChannel_ 引申而来，这意味着我们可以用一个 _Selector_ 对象来对准备就绪 ( 内核准备好数据 ) 的 socket 通道进行选择 ( readiness selection )
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220518231242968.png" alt="image-20220518231242968" style="zoom:67%;" />
+
+注意 _DatagramChannel_ 和 _SocketChannel_ 实现定义读和写功能的接口而 _ServerSocketChannel_ 不实现，_ServerSocketChannel_ 负责监听传入的连接和创建新的 _SocketChannel_ 对象，它本身不传输数据
+
+全部 socket 通道类 ( _DatagramChannel_、_SocketChannel_、_ServerSocketChannel_ ) 在被实例化时都会创建一个对等 socket 对象，其位于包 java.net 中 ( _Socket_、_ServerSocket_、_DatagramSocket_ )，可以通过 _socket()_ 方法获取
+
+#### 5.1 非阻塞模式
+
+Socket 通道可以在非阻塞模式下运行，非阻塞 I/O 是许多复杂的、高性能的程序构建的基础，要把一个 socket 通道置于非阻塞模式，我们要依靠所以 socket 通道类的公有父类：_SelectableChannel_，下面是方法就是关于通道的阻塞模式的：
+
+```java
+public abstract class SelectableChannel
+    extends AbstractInterruptibleChannel
+    implements Channel
+{
+    // This is a partial API listing
+    public abstract SelectableChannel configureBlocking(boolean block) throws IOException;
+    public abstract boolean isBlocking();
+    public abstract Object blockingLock();
+}
+```
+
+设置或重新设置一个通道的阻塞模式是很简单的，只有调用 _configureBlocking()_ 方法即可，另外可以通过调用 _isBlocking()_ 方法来判断某个 socket 通道当前处于哪种模式
+
+_blockingLock()_ 方法返回一个对象，只有拥有此对象的锁的线程才能更改通道的阻塞模式：
+
+```java
+Object lockObj = serverChannel.blockingLock();
+synchronized (lockObj) {
+    // This thread now owns the lock; mode can't be changed
+}
+```
+
+#### 5.2 ServerSocketChannel
+
+_ServerSocketChannel_ 是一个基于通道的 socket 监听器，它同我们所熟悉的 _java.net.ServerSocket_ 执行相同的基本任务，不过它增加了通道语义，因此能够在非阻塞模式下运行
+
+用静态的 _open()_ 工厂方法创建一个新的 _ServerSocketChannel_ 对象，将会返回同一个未绑定的 _java.net.ServerSocket_ 关联的通道
+
+```java
+ServerSocketChannel ssc = ServerSocketChannel.open();
+ssc.bind(new InetSocketAddress(1234));
+```
+
+一旦创建了一个 _ServerSocketChannel_ 并调用了 _bind()_ 方法绑定了一个监听端口，就可以调用 _accept()_ 方法：
+
+- 如果在 _ServerSocket_ 上调用 ( _ServerSocketChannel.socket()_ )，那么它会同任何其他的 _ServerSocket_ 表现一样：总是阻塞并返回一个 _java.net.Socket_ 对象
+- 如果在 _ServerSocketChannel_ 上调用 _accept()_，则会返回 _SocketChannel_ 对象，返回的对象能够在非阻塞模式下运行
+
+如果 _ServerSocketChannel_ 配置为非阻塞模式，当没有传入连接在等待时，_ServerSocketChannel.accept()_ 会立即返回 null，下面的例子演示了如何使用一个非阻塞的 accept() 方法：
+
+```java
+package com.zhengjianting.nio.channel;
+
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+
+// Start this program, then "telnet localhost 1234" to connect it
+public class ChannelAccept {
+    public static final String GREETING = "Hello I must be going.\r\n";
+
+    public static void main(String[] args) throws Exception {
+        int port = 1234;
+        if (args.length > 0)
+            port = Integer.parseInt(args[0]);
+        ByteBuffer buffer = ByteBuffer.wrap(GREETING.getBytes());
+        ServerSocketChannel ssc = ServerSocketChannel.open();
+        ssc.bind(new InetSocketAddress(port));
+        ssc.configureBlocking(false);
+        while (true) {
+            System.out.println("Waiting for connections");
+            SocketChannel sc = ssc.accept();
+            if (sc == null) {
+                // no connections, snooze a while
+                Thread.sleep(2000);
+            } else {
+                System.out.println("Incoming connection from: " + sc.getRemoteAddress());
+                sc.write(buffer);
+                buffer.rewind(); // position = 0
+                sc.close();
+            }
+        }
+    }
+}
+```
+
+#### 5.3 SocketChannel
+
+```java
+public abstract class SocketChannel
+    extends AbstractSelectableChannel
+    implements ByteChannel, ScatteringByteChannel, GatheringByteChannel, NetworkChannel
+{
+    // This is a partial API listing
+    public static SocketChannel open() throws IOException { ... }
+    public static SocketChannel open(SocketAddress remote) throws IOException { ... }
+    public abstract Socket socket();
+    public abstract boolean connect(SocketAddress remote) throws IOException;
+    public abstract boolean isConnectionPending();
+    public abstract boolean finishConnect() throws IOException;
+    public abstract boolean isConnected();
+    public final int validOps() {
+        return (SelectionKey.OP_READ
+                | SelectionKey.OP_WRITE
+                | SelectionKey.OP_CONNECT);
+    }
+}
+```
+
+_Socket_ 和 _SocketChannel_ 类封装点对点、有序的网络连接，类似于我们所熟知并喜爱的 TCP/IP 网络连接，_SocketChannel_ 扮演客户端发起同一个监听服务器的连接，直到连接成功，它才能收到数据并且只会从连接到的地址接收
+
+虽然每个 _SocketChannel_ 对象都会创建一个对等的 _Socket_ 对象，反过来却不成立，直接创建的 _Socket_ 对象不会关联 _SocketChannel_ 对象，它们的 _getChannel()_ 方法只返回 null
+
+新创建的 _SocketChannel_ 虽已打开却是未连接的，在一个未连接的 _SocketChannel_ 对象上尝试一个 I/O 操作会导致 _NotYetConnectedException_ 异常，也就是说，_SocketChannel_ 关联一个 I/O 服务 ( socket )，而这个 socket 需要和监听服务器建立连接之后才能和与之建立连接的 socket 传输数据，这也是为什么会有两个 _getAddress()_ 方法：
+
+```java
+public abstract class SocketChannel
+    extends AbstractSelectableChannel
+    implements ByteChannel, ScatteringByteChannel, GatheringByteChannel, NetworkChannel
+{
+    // Returns the remote address to which this channel's socket is connected.
+    public abstract SocketAddress getRemoteAddress() throws IOException;
+    
+    // Returns the socket address that this channel's socket is bound to.
+    public abstract SocketAddress getLocalAddress() throws IOException;
+}
+```
+
+我们可以通过在通道上直接调用 _connect()_ 方法或在通道关联的 _Socket_ 对象上调用 _connect()_ 来将该 socket 通道连接，以下两种方式是等价的：
+
+```java
+SocketChannel socketChannel = SocketChannel.open();
+socketChannel.connect(new InetSocketAddress("someHost", somePort));
+```
+
+```java
+SocketChannel socketChannel = SockectChannel.open(new InetSocketAddress("someHost", somePort));
+```
+
+当配置为非阻塞模式的 _SocketChannel_ 调用 _connect()_ 方法时，它发起对请求地址的连接并且立即返回值，如果返回值是 true，说明连接立即建立了 ( 这可能是本地环回连接 )；如果连接不能立即建立，_connect()_ 方法返回 false 并且继续连接建立过程
+
+ 面向流的 socket 建立连接状态需要一定的时间，因为两个待连接系统之间必须进行包对话以建立维护流 socket 所需的状态信息，假设 _SocketChannel_ 正在进行连接，_isConnectPending()_ 方法就会返回 true 值
+
+调用 _finishConnect()_ 方法来完成连接过程，如果连接已经完成，该方法会立即返回 true，当连接未完成时：
+
+- 配置为非阻塞模式的 _SocketChannel_ 会立即返回 false
+- 配置为阻塞模式的 _SocketChannel_ 会阻塞直到连接完成或失败，相对应地返回 true 或抛出异常
+
+一旦连接过程成功完成，_isConnected()_ 将返回 true 值
+
+下面的例子演示了如何管理异步连接：
+
+```java
+package com.zhengjianting.nio.channel;
+
+import java.net.InetSocketAddress;
+import java.nio.channels.SocketChannel;
+
+public class ConnectAsync {
+    public static void main(String[] args) throws Exception {
+        String host = "localhost";
+        int port = 1234;
+        if (args.length == 2) {
+            host = args[0];
+            port = Integer.parseInt(args[1]);
+        }
+        InetSocketAddress addr = new InetSocketAddress(host, port);
+        SocketChannel sc = SocketChannel.open();
+        sc.configureBlocking(false);
+        System.out.println("initiating connection");
+        sc.connect(addr);
+        while (!sc.finishConnect()) {
+            doSomethingUseful();
+        }
+        System.out.println("connection established");
+        sc.close();
+    }
+
+    private static void doSomethingUseful() {
+        System.out.println("doing something useless");
+    }
+}
+```
+
+#### 5.4 DatagramChannel
