@@ -808,3 +808,148 @@ public class ConnectAsync {
 ```
 
 #### 5.4 DatagramChannel
+
+### 6. 管道
+
+java.nio.channels 包中有一个名为 _Pipe_ ( 管道 ) 的类，广义上讲，管道就是一个用来在两个实体之间单向传输数据的导管，在 Unix 操作系统中，管道被用来连接一个进程的输出和另一个进程的输入，_Pipe_ 类实现一个管道范例，不过它所创建的管道是进程内 ( 在 Java 虚拟机进程内部 ) 而非进程间使用的
+
+```java
+public abstract class Pipe {
+    protected Pipe() { }
+    public abstract SourceChannel source();
+    public abstract SinkChannel sink();
+    public static Pipe open() throws IOException {
+        return SelectorProvider.provider().openPipe();
+    }
+    
+    public static abstract class SourceChannel
+        extends AbstractSelectableChannel
+        implements ReadableByteChannel, ScatteringByteChannel
+    {
+        protected SourceChannel(SelectorProvider provider) {
+            super(provider);
+        }
+        
+        public final int validOps() {
+            return SelectionKey.OP_READ;
+        }
+    }
+    
+    public static abstract class SinkChannel
+        extends AbstractSelectableChannel
+        implements WritableByteChannel, GatheringByteChannel
+    {
+        protected SinkChannel(SelectorProvider provider) {
+            super(provider);
+        }
+        
+        public final int validOps() {
+            return SelectionKey.OP_WRITE;
+        }
+    }
+}
+```
+
+_Pipe_ 类创建一对提供环回机制的 _Channel_ 对象，这两个通道的远端是连接起来的，以便任何写在 _SinkChannel_ 对象上的数据都能出现在 _SourceChannel_ 对象上
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220519192424295.png" alt="image-20220519192424295" style="zoom:80%;" />
+
+_Pipe_ 实例是通过调用不带参数的 _Pipe.open()_ 工厂方法来创建的，_Pipe_ 类定义了两个通道类来实现管道：_Pipe.SourceChannel_ ( 管道复杂读的一端 )，_Pipe.SinkChannel_ ( 管道负责写的一端 )，这两个通道实例是在 _Pipe_ 对象创建的同时被创建的，可以通过在 _Pipe_ 对象上分别调用 _source()_ 和 _sink()_ 方法来获取
+
+管道可以被用来仅在同一个进程 ( Java 虚拟机进程 ) 内部传输数据，虽然有更加高效的方式在线程之间传输数据，但是使用管道的好处在于封装性
+
+管道所能承载的数据量是依赖实现的 ( implementation-dependent )，唯一可保证的是写到 _SinkChannel_ 中的字节都能按照同样的顺序在 _SourceChannel_ 上重现
+
+下面的例子演示了如何使用管道：
+
+```tex
+			    		   用户空间					关联的 I/O 设备
+				<--	|	   buffer
+Worker Thread	 <-- |		  ↓
+				<-- |	 SinkChannel  --->
+			 	  			 ↓		    ↓ Pipe
+			 	<-- |	SourceChannel ---↓
+ Main Thread	 <-- |		  ↓
+	 	   		<--	|  WritableByteChannel			   System.out
+```
+
+```java
+package com.zhengjianting.nio.channel;
+
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.Pipe;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
+import java.util.Random;
+
+public class PipeTest {
+    public static void main(String[] args) throws Exception {
+        WritableByteChannel out = Channels.newChannel(System.out);
+        ReadableByteChannel workerChannel = startWorker(10);
+        ByteBuffer buffer = ByteBuffer.allocate(100);
+        while (workerChannel.read(buffer) >= 0) {
+            buffer.flip();
+            out.write(buffer);
+            buffer.clear();
+        }
+    }
+
+    // This method can return a SocketChannel or FileChannel instance just as easily
+    private static ReadableByteChannel startWorker(int reps) throws Exception {
+        Pipe pipe = Pipe.open();
+        Worker worker = new Worker(pipe.sink(), reps);
+        worker.start();
+        return pipe.source();
+    }
+
+    /**
+     * A worker thread object which writes data down a channel.
+     * Note: this object knows nothing about Pipe, uses only a generic WritableByteChannel.
+     */
+    private static class Worker extends Thread {
+        WritableByteChannel channel;
+        int reps;
+
+        Worker(WritableByteChannel channel, int reps) {
+            this.channel = channel;
+            this.reps = reps;
+        }
+
+        @Override
+        public void run() {
+            ByteBuffer buffer = ByteBuffer.allocate(100);
+            try {
+                for (int i = 0; i < reps; i++) {
+                    doSomeWork(buffer);
+                    // channel may not take it all at once
+                    while (channel.write(buffer) > 0) {
+                        // empty
+                    }
+                }
+                channel.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        private final String[] products = {
+                "No good deed goes unpunished",
+                "To be, or what?",
+                "No matter where you go, there you are",
+                "Just say \"Yo\"",
+                "My karma ran over my dogma"
+        };
+        private final Random rand = new Random();
+
+        private void doSomeWork(ByteBuffer buffer) {
+            String product = products[rand.nextInt(products.length)];
+            buffer.clear();
+            buffer.put(product.getBytes());
+            buffer.put("\r\n".getBytes());
+            buffer.flip();
+        }
+    }
+}
+```
+
