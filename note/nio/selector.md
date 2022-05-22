@@ -252,3 +252,155 @@ Selector 类的 _select()_ 方法有以下三种不同的形式，它们仅仅�
 处理思想是只有在已选择的键的集合 ( Selected key set ) 中的选择键才被认为是包含了合法的就绪信息的，因此应当手动清除陈旧的选择键，清理一个 SelectKey 的 ready 集合的方式是将这个键从已选择的键的集合 ( Selected key set ) 中移除
 
 这种框架提供了很多灵活性，通常的做法是在选择器上调用一次 select 操作 ( 这将更新已选择的键的集合 )，然后遍历 _selectKeys()_ 方法返回的键的集合，在按顺序检查每个键的过程中，相关的通道也根据键的就绪集合进行处理，然后将选择键从已选择的键的集合 ( Selected key set ) 中移除 ( 通过在 Iterator 对象上调用 _remove()_ 方法 )，然后检查下一个键，完成后，通过再次调用 _select()_ 方法重复这个过程
+
+以下代码是典型的服务器的例子，可以通过 telnet 进行测试：
+
+```java
+package com.zhengjianting.nio.selector;
+
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.*;
+import java.util.Iterator;
+
+public class SelectSockets {
+    public static int PORT_NUMBER = 1234;
+
+    public static void main(String[] args) throws Exception {
+        new SelectSockets().go(args);
+    }
+
+    public void go(String[] args) throws Exception {
+        int port = PORT_NUMBER;
+        if (args.length > 0) // Override default listen port
+            port = Integer.parseInt(args[0]);
+        System.out.println("Listening in port " + port);
+
+        // Create a new Selector for use below
+        Selector selector = Selector.open();
+        // Allocate an unbound server socket channel
+        ServerSocketChannel serverChannel = ServerSocketChannel.open();
+        // Set the port server channel will listen to
+        serverChannel.bind(new InetSocketAddress(port));
+        // Set nonblocking mode for the listening socket
+        serverChannel.configureBlocking(false);
+
+        // Register the ServerSocketChannel with the Selector
+        serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+
+        while (true) {
+            // This may block for a long time. Upon Returning, the
+            // selected set contains keys of the ready channels.
+            int n = selector.select();
+            if (n == 0)
+                continue; // nothing to do
+
+            // Get an iterator over the set of selected keys
+            Iterator<SelectionKey> it = selector.selectedKeys().iterator();
+
+            // Look at each key in the selected set
+            while (it.hasNext()) {
+                SelectionKey key = it.next();
+
+                // Is a new connection coming in?
+                if (key.isAcceptable()) {
+                    ServerSocketChannel server = (ServerSocketChannel) key.channel();
+                    SocketChannel channel = server.accept();
+                    registerChannel(selector, channel, SelectionKey.OP_READ);
+                    sayHello(channel);
+                }
+
+                // Is there data to read in this channel
+                if (key.isReadable())
+                    readDataFromSocket(key);
+
+                // Remove key from selected set; it's been handled
+                it.remove();
+            }
+        }
+    }
+
+    /**
+     * Register the given channel with the given selector for the given
+     * operations of interest
+     */
+    protected void registerChannel(Selector selector, SelectableChannel channel, int ops) throws Exception {
+        if (channel == null)
+            return; // could happen
+
+        // Set the new channel nonblocking
+        channel.configureBlocking(false);
+
+        // Register it with the selector
+        channel.register(selector, ops);
+    }
+
+    // Use the same byte buffer for all channels. A single thread is
+    // servicing all the channels, so no danger of concurrent access.
+    private ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+
+    // Spew a greeting to the incoming client connection.
+    private void sayHello(SocketChannel channel) throws Exception {
+        buffer.clear();
+        buffer.put("Hi there!\r\n".getBytes());
+        buffer.flip();
+
+        channel.write(buffer);
+    }
+
+
+    /**
+     * Sample data handler method for a channel with data ready to read.
+     * @param key
+     *  A SelectionKey object associated with a channel determined by
+     *  the selector to be ready for reading. If the channel returns
+     *  an EOF condition, it is closed here, which automatically
+     *  invalidates the associated key. The selector will then
+     *  de-register the channel on the next select call.
+     */
+    private void readDataFromSocket(SelectionKey key) throws Exception {
+        SocketChannel socketChannel = (SocketChannel) key.channel();
+        int count;
+        buffer.clear();
+
+        // Loop while data is available; channel is nonblocking
+        while ((count = socketChannel.read(buffer)) > 0) {
+            buffer.flip(); // Make buffer readable
+
+            // Send the data; don't assume it goes all at once
+            while (buffer.hasRemaining())
+                socketChannel.write(buffer);
+
+            // WARNING: the above loop is evil. Because
+            // it's writing back to the same nonblocking
+            // channel it read the data from, this code can
+            // potentially spin in a busy loop. In real life
+            // you'd do something more useful than this.
+
+            buffer.clear();
+        }
+
+        if (count < 0)
+            socketChannel.close(); // Close channel on EOF, invalidates the key
+    }
+}
+```
+
+#### 3.4 并发性
+
+选择器对象是线程安全的，但它们包含的键集合不是，通过 _keys()_ 和 _selectKeys()_ 返回的键的集合是 Selector 对象内部私有的 Set 对象集合的直接引用，当一个线程遍历键集合时，另一个线程修改了底层的 Set，那么由于 Iterator 对象是快速失败的 ( fail-fast )，它将会抛出 java.util.ConcurrentModificationException
+
+### 4. 异步关闭能力
+
+### 5. 选择过程的可扩展性
+
+通过选择器可以简易地实现用单线程同时管理多个可选择通道，使用一个线程来为多个通道提供服务，消除了管理多线程的额外开销，降低了复杂性并可能大幅提升性能，但只使用一个线程来服务所有可选择通道不是适用于所有情况：
+
+- 对于单 CPU 的系统而言单线程可能是一个好主意，因为在任何情况下都只有一个线程能够运行，通过消除在线程之间进行上下文切换带来的额外开销，可以提高总吞吐量；但是对于多 CPU 的系统而言，在一个有 n 个 CPU 的系统上，只使用单线程可能会导致有 n - 1 个 CPU 处于空闲状态
+- 如果只用一个线程为所有通道提供服务，那么在线程为某个通道提供服务时，其它通道不得不在队列中等待，例如在上述代码中，通过迭代遍历 _Set\<SelectionKey\>_ 依次为所有就绪通道提供服务，如果在为某个通道上提供服务时花费了数秒 ( 例如 _readDataFromSocket()_ 花费了数秒 )，那么后续的通道不得不等待
+
+为了解决这些问题，我们可以使用更多的线程来为通道提供服务，需要注意的是使用多个选择器并将通道随机分配给它们当中的一个并不是合理的解决方案，这只不过使得每个线程规模变小了，每个线程都还存在上述问题
+
+一个更好的策略是对所有的可选择通道使用一个选择器，并将对就绪通道的服务委托给其它线程，因此只需要用一个线程监控通道的就绪状态并使用一个工作线程池来处理接收到的数据，并且还可以根据通道的功能划分为多个工作线程池：日志线程池、命令/控制线程池、状态请求线程池等等
+
+以下代码是对 SelectSockets 的扩展，它重写了 _readDataFromSocket()_ 方法，并使用线程池来为准备好数据用于读取的通道提供服务，与在主线程中同步地读取数据不同，这个版本的实现将 SelectionKey 对象传递给为其服务的工作线程：
