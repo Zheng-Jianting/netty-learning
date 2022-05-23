@@ -4,17 +4,77 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.LinkedList;
+import java.util.List;
 
+/**
+ * Specialization of the SelectSockets class which uses a thread pool to service
+ * channels. The thread pool is an ad-hoc implementation quicky lashed togther
+ * in a few hours for demonstration purposes. It's definitely not production quality.
+ */
 public class SelectSocketsThreadPool extends SelectSockets {
+    private static final int MAX_THREADS = 5;
+    private ThreadPool pool = new ThreadPool(MAX_THREADS);
+
+    /**
+     * Sample data handler method for a channel with data ready to read. This
+     * method is invoked from the go( ) method in the parent class. This handler
+     * delegates to a worker thread in a thread pool to service the channel,
+     * then returns immediately.
+     */
+    @Override
+    protected void readDataFromSocket(SelectionKey key) {
+        WorkerThread worker = pool.getWorker();
+        if (worker == null) {
+            // No threads available. Do nothing. The selection
+            // loop will keep calling this method until a
+            // thread becomes available. This design could be improved.
+            return;
+        }
+
+        // Invoking this wakes up the worker thread, then returns
+        worker.serviceChannel(key);
+    }
+
     public static void main(String[] args) throws Exception {
         new SelectSocketsThreadPool().go(args);
     }
 
+    /**
+     * A very simple thread pool class. The pool size is set at construction
+     * time and remains fixed. Threads are cycled through a FIFO idle queue.
+     */
     private class ThreadPool {
+        List<WorkerThread> idle = new LinkedList<>();
+
+        ThreadPool(int poolSize) {
+            // Fill up the pool with worker threads
+            for (int i = 0; i < poolSize; i++) {
+                WorkerThread thread = new WorkerThread(this);
+
+                // Set thread name for debugging. Start it.
+                thread.setName("Worker" + (i + 1));
+                thread.start();
+
+                idle.add(thread);
+            }
+        }
+
+        // Find an idle worker thread, if any. Could return null.
+        WorkerThread getWorker() {
+            WorkerThread worker = null;
+            synchronized (idle) {
+                if (idle.size() > 0)
+                    worker = idle.remove(0);
+            }
+            return worker;
+        }
 
         // Called by the worker thread to return itself to the idle pool.
         void returnWorker(WorkerThread worker) {
-
+            synchronized (idle) {
+                idle.add(worker);
+            }
         }
     }
 

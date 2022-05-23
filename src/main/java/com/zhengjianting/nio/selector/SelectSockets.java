@@ -100,7 +100,7 @@ public class SelectSockets {
      *  invalidates the associated key. The selector will then
      *  de-register the channel on the next select call.
      */
-    private void readDataFromSocket(SelectionKey key) throws Exception {
+    protected void readDataFromSocket(SelectionKey key) throws Exception {
         SocketChannel socketChannel = (SocketChannel) key.channel();
         int count;
         buffer.clear();
