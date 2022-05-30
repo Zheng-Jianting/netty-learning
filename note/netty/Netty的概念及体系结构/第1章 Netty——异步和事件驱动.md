@@ -63,9 +63,85 @@ ChannelFuture 提供了几种额外的方法，这些方法使得我们能够注
 以下代码展示了一个 ChannelFuture 作为一个 I/O 操作的一部分返回的例子，这里，connect() 方法将会直接返回，而不会阻塞，该调用将会在后台完成，这究竟什么时候会发生则取决于若干的因素，但这个关注点已经从代码中抽象出来了，因为线程不用阻塞以等待对应的操作完成，所以它可以同时做其他的工作，从而更加有效地利用资源
 
 ```java
-// y
+// 异步地建立连接
 Channel channel = ...;
 // Does not block
 ChannelFuture future = channel.connect(new InetSocketAddress("192.168.0.1", 25));
 ```
 
+以下代码展示了如何使用 ChannelFutureListener. 首先，要连接到远程节点上，然后，要注册一个新的 ChannelFutureListener 到对 connect() 方法的调用所返回的 ChannelFuture 上。当该监听器被通知连接已经建立的时候，要检查对应的状态，如果该操作是成功的，那么将数据写到该 Channel. 否则，要从 ChannelFuture 中检索对应的 Throwable
+
+```java
+Channel channel = ...;
+// Does not block, 异步地连接到远程节点
+ChannelFuture future = channel.connect(new InetSocketAddress("192.168.0.1", 25));
+
+// 注册一个 ChannelFutureListener, 以便在操作完成时获得通知
+future.addListener(new ChannelFutureListener() {
+    @Override
+    public void operationComplete(ChannelFuture future) {
+        if (future.isSuccess()) {
+            // 如果操作是成功的, 则创建一个 ByteBuf 以持有数据
+            ByteBuf buffer = Unpooled.copiedBuffer("Hello", Charset.defaultCharset());
+            // 将数据异步地发送到远程节点, 返回一个 ChannelFuture
+            ChannelFuture wf = future.channel().writeAndFlush(buffer);
+            // ...
+        } else {
+            // 如果发送错误, 则访问描述原因的 Throwable
+            Throwable cause = future.cause();
+            cause.printStackTrace();
+        }
+    }
+});
+```
+
+需要注意的是，对错误的出来完全取决于你、目标，当然也包括目前任何对于特定类型的错误加以的限制。例如，如果连接失败，你可以尝试重新连接或者建立一个到另一个远程节点的连接
+
+如果你把 ChannelFutureListener 看作是回调的一个更加精细的版本，那么你是对的。事实上，回调和 Future 是相互补充的机制，它们相互结合，构成了 Netty 本身的关键构件块之一
+
+#### 2.4 事件和 ChannelHandler
+
+Netty 使用不同的事件来通知我们状态的改变或者是操作的状态。这使得我们能够基于已经发生的事件来触发适当的动作，这些动作可能是：
+
+- 记录日志
+- 数据转换
+- 流控制
+- 应用程序逻辑
+
+Netty 是一个网络编程框架，所以事件是按照它们与入站或出站数据流的相关性进行分类的。可能由入站数据或者相关的状态更改而触发的事件包括：
+
+- 连接已被激活或者连接失活
+- 数据读取
+- 用户事件
+- 错误事件
+
+出站事件是未来将会触发的某个动作的操作结果，这些动作包括：
+
+- 打开或者关闭到远程节点的连接
+- 将数据写到或者冲刷到套接字
+
+每个事件都可以被分发给 ChannelHandler 类中的某个用户实现的方法。这是一个很好的将事件驱动范式直接转换为应用程序构件块的例子。下图展示了一个事件是如何被一个这样的 ChannelHandler 链处理的：
+
+<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220530124414841.png" alt="image-20220530124414841" style="zoom:80%;" />
+
+Netty 的 ChannelHandler 为上图所示的处理器提供了基本的抽象，目前可以认为每个 ChannelHandler 的实例都类似于一种为了响应特定事件而被执行的回调
+
+Netty 提供了大量预定义的可以开箱即用的 ChannelHandler 实现，包括用于各种协议 ( 如 HTTP 和 SSL/TLS ) 的 ChannelHandler
+
+#### 2.5 将它们放在一起
+
+##### 2.5.1 Future、回调和 ChannelHandler
+
+Netty 的异步编程模型是建立在 Future 和回调的概念之上的，而将事件派发到 ChannelHandler 的方法则发生在更深的层次上，结合在一起，这些元素就提供了一个处理环境，使你的应用程序逻辑可以独立于任何网络操作相关的顾虑而独立地演变，这也是 Netty 的设计方式的一个关键目标
+
+拦截操作以及高速地转换入站数据和出站数据，都只需要你提供回调或者利用操作所返回的 Future，这使得链接操作变得既简单又高效，并且促进了可重用的通用代码的编写
+
+##### 2.5.2 选择器、事件和 EventLoop
+
+Netty 通过触发事件将 Selector 从应用程序中抽象出来，消除了所有本来将需要手动编写的派发代码，在内部，将会为每个 Channel 分配一个 EventLoop，用以处理所有事件，包括：
+
+- 注册感兴趣的事件
+- 将事件派发给 ChannelHandler
+- 安排进一步的动作
+
+EventLoop 本身只由一个线程驱动，其处理了一个 Channel 的所有 I/O 事件，并且在该 EventLoop 的整个生命周期内都不会改变。这个简单而强大的设计消除了你可能有的在 ChannelHandler 实现中需要进行同步的任何顾虑，因此，你可以专注于提供正确的逻辑，用来在有感兴趣的数据要处理的时候执行
