@@ -2,7 +2,7 @@
 
 ### 1. Netty 简介
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220528162731061.png" alt="image-20220528162731061" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220528162731061.png" alt="image-20220528162731061" style="zoom:80%;" />
 
 #### 1.1 异步和事件驱动
 
@@ -122,7 +122,7 @@ Netty 是一个网络编程框架，所以事件是按照它们与入站或出�
 
 每个事件都可以被分发给 ChannelHandler 类中的某个用户实现的方法。这是一个很好的将事件驱动范式直接转换为应用程序构件块的例子。下图展示了一个事件是如何被一个这样的 ChannelHandler 链处理的：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220530124414841.png" alt="image-20220530124414841" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220530124414841.png" alt="image-20220530124414841" style="zoom:80%;" />
 
 Netty 的 ChannelHandler 为上图所示的处理器提供了基本的抽象，目前可以认为每个 ChannelHandler 的实例都类似于一种为了响应特定事件而被执行的回调
 

@@ -2,7 +2,7 @@
 
 除了 Boolean 类型以外，每一种 Java 基本类型都有对应的 Buffer：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513135158283.png" alt="image-20220513135158283" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513135158283.png" alt="image-20220513135158283" style="zoom:80%;" />
 
 ### 1. 缓冲区基础
 
@@ -29,7 +29,7 @@ public abstract class Buffer {
 
 下图展示了一个新创建的 capacity 为 10 的 ByteBuffer：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513140844056.png" alt="image-20220513140844056" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513140844056.png" alt="image-20220513140844056" style="zoom:80%;" />
 
 #### 1.2 Put
 
@@ -93,7 +93,7 @@ buffer.put((byte) 'H').put((byte) 'e').put((byte) 'l').put((byte) 'l').put((byte
 
 在五次调用 `ByteBuffer put(byte x)` 后，缓冲区的状态为：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513144356008.png" alt="image-20220513144356008" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513144356008.png" alt="image-20220513144356008" style="zoom:80%;" />
 
 如果想要将缓冲区的内容从 "Hello" 修改为 "Mellow"，可以这样实现：
 
@@ -107,7 +107,7 @@ buffer.put((byte) 'w');
 
 修改后的缓冲区如图所示：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513145508074.png" alt="image-20220513145508074" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513145508074.png" alt="image-20220513145508074" style="zoom:80%;" />
 
 #### 1.3 Flip
 
@@ -126,7 +126,7 @@ public abstract class Buffer {
 
 例如，对上述写入 "Mellow" 的缓冲区执行 flip 操作，缓冲区则从写状态转化为读状态：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513145732858.png" alt="image-20220513145732858" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513145732858.png" alt="image-20220513145732858" style="zoom:80%;" />
 
 #### 1.4 Get
 
@@ -270,7 +270,7 @@ public class BufferFillDrain {
 
 例如，向 buffer 写入 "Mellow" 之后执行 flip，从 buffer 中读取前两个字符 "Me"，缓冲区状态如下：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513160110507.png" alt="image-20220513160110507" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513160110507.png" alt="image-20220513160110507" style="zoom:80%;" />
 
 如果此时想继续向 buffer 内写入内容，那么就可以执行 _compact()_ 函数，以 HeapByteBuffer 为例：
 
@@ -292,7 +292,7 @@ class HeapByteBuffer extends ByteBuffer {
 
 以上图为例，compact 就是把 hb[2，6) 向前移动至 hb[0，4)，之后将 position 设为缓冲区内剩余的元素数量，即 lim - pos = 6 - 2 = 4，将 limit 设为 capacity，如图所示：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513160650493.png" alt="image-20220513160650493" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513160650493.png" alt="image-20220513160650493" style="zoom:80%;" />
 
 而此时，缓冲区也从读状态转换成了写状态
 
@@ -493,7 +493,7 @@ ByteBuffer dupeBuffer = buffer.duplicate();
 buffer.clear();
 ```
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513224633244.png" alt="image-20220513224633244" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513224633244.png" alt="image-20220513224633244" style="zoom:80%;" />
 
 #### 3.2 AsReadOnlyBuffer
 
@@ -537,7 +537,7 @@ buffer.position(3).limit(5);
 ByteBuffer sliceBuffer = buffer.slice();
 ```
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220513230519270.png" alt="image-20220513230519270" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220513230519270.png" alt="image-20220513230519270" style="zoom:80%;" />
 
 ### 4. 字节缓冲区
 
@@ -547,11 +547,11 @@ ByteBuffer sliceBuffer = buffer.slice();
 
 - 大端字节顺序：数值的最高字节 —— big end ( 大端 )，位于低位内存地址
 
-  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220514162032391.png" alt="image-20220514162032391" style="zoom:80%;" />
+  <img src="../../picture/nio/buffer/image-20220514162032391.png" alt="image-20220514162032391" style="zoom:80%;" />
 
 - 小端字节顺序：数值的最低字节优先保存在内存中
 
-  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220514162102922.png" alt="image-20220514162102922" style="zoom:80%;" />
+  <img src="../../picture/nio/buffer/image-20220514162102922.png" alt="image-20220514162102922" style="zoom:80%;" />
 
 IP 协议规定了使用大端的网络字节顺序，所有在 IP 分组报文中的多字节数值必须先在本地主机字节顺序和通用的网络字节顺序之间进行转换
 
@@ -643,7 +643,7 @@ ByteBuffer byteBuffer = ByteBuffer.allocate(7).order(ByteOrder.BIG_ENDIAN);
 CharBuffer charBuffer = byteBuffer.asCharBuffer();
 ```
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220514173049704.png" alt="image-20220514173049704" style="zoom:80%;" />
+<img src="../../picture/nio/buffer/image-20220514173049704.png" alt="image-20220514173049704" style="zoom:80%;" />
 
 当一个视图缓冲区被创建时，视图会继承原始 ByteBuffer 对象的字节顺序，这个视图的字节顺序不能再被修改，字节顺序决定了 ByteBuffer 中的字节是以什么顺序被组合成 Char 变量的
 

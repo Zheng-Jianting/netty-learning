@@ -105,7 +105,7 @@ public abstract class SelectionKey {
 
 下面是 Selector、SelectableChannel、SelectionKey 三者之间的关系：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220521144238949.png" alt="image-20220521144238949" style="zoom:80%;" />
+<img src="../../picture/nio/selector/image-20220521144238949.png" alt="image-20220521144238949" style="zoom:80%;" />
 
 #### 1.2 建立选择器
 

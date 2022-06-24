@@ -21,7 +21,7 @@ Netty 的数据处理 API 通过两个组件暴露 —— abstract class ByteBuf
 
 ByteBuf 维护了两个不同的索引：一个用于读取，一个用于写入，下图展示了一个空 ByteBuf 的布局结构和状态：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220604155248772.png" alt="image-20220604155248772" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220604155248772.png" alt="image-20220604155248772" style="zoom:80%;" />
 
 名称以 read 或者 write 开头的 ByteBuf 方法，将会推进其对应的索引；而名称以 set 或者 get 开头的方法在其传入的索引参数上进行操作，不会改变 ByteBuf 的索引
 
@@ -116,13 +116,13 @@ for (int i = 0; i < buffer.capacity(); i++) {
 
 ByteBuf 同时具有读索引和写索引，下图展示了 ByteBuf 是如何被它的两个索引划分成 3 个区域的
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220604230346443.png" alt="image-20220604230346443" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220604230346443.png" alt="image-20220604230346443" style="zoom:80%;" />
 
 #### 3.3 可丢弃字节
 
 通过调用 discardReadBytes() 方法可以回收上图中的可丢弃字节，结果如下图所示
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220604230826923.png" alt="image-20220604230826923" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220604230826923.png" alt="image-20220604230826923" style="zoom:80%;" />
 
 在调用 discardReadBytes() 之后，对可写分段的内容并没有任何的保证；而且这个方法可能会导致内存复制，因此建议只有在真正需要的时候才调用该方法，例如，当内存非常宝贵的时候
 
@@ -222,27 +222,27 @@ assert buf.getByte(0) != copy.getByte(0); // 将会成功, 因为数据不是共
 
 下表列举了最常用的 get() 方法：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605003758767.png" alt="image-20220605003758767" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605003758767.png" alt="image-20220605003758767" style="zoom:80%;" />
 
 大多数的这些操作都有一个对应的 set() 方法：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605003854248.png" alt="image-20220605003854248" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605003854248.png" alt="image-20220605003854248" style="zoom:80%;" />
 
 read() 操作作用于当前的 readerIndex，这些方法将用于从 ByteBuf 中读取数据：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605004232909.png" alt="image-20220605004232909" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605004232909.png" alt="image-20220605004232909" style="zoom:80%;" />
 
 几乎每个 read() 方法都有对应的 write() 方法，用于将数据追加到 ByteBuf 中。注意，下表列出的方法的参数是需要写入的值，而不是索引值：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605004342405.png" alt="image-20220605004342405" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605004342405.png" alt="image-20220605004342405" style="zoom:80%;" />
 
 #### 3.10 更多的操作
 
 下表列举了由 ByteBuf 提供的其他有用操作：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605004912655.png" alt="image-20220605004912655" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605004912655.png" alt="image-20220605004912655" style="zoom:80%;" />
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605004938862.png" alt="image-20220605004938862" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605004938862.png" alt="image-20220605004938862" style="zoom:80%;" />
 
 ### 4. ByteBufHolder 接口
 
@@ -252,7 +252,7 @@ read() 操作作用于当前的 readerIndex，这些方法将用于从 ByteBuf �
 
 ByteBufHolder 只有几种用于访问底层数据和引用计数的方法：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605005708533.png" alt="image-20220605005708533" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605005708533.png" alt="image-20220605005708533" style="zoom:80%;" />
 
 如果想要实现一个将其有效负载存储在 ByteBuf 中的消息对象，那么 ByteBufHolder 将是个不错的选择
 
@@ -264,7 +264,7 @@ ByteBufHolder 只有几种用于访问底层数据和引用计数的方法：
 
 下表列出了 ByteBufAllocator 提供的一些操作：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605142425540.png" alt="image-20220605142425540" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605142425540.png" alt="image-20220605142425540" style="zoom:80%;" />
 
 可以通过 Channel ( 每个都可以有一个不同的 ByteBufAllocator 实例 ) 或者绑定到 ChannelHandler 的 ChannelHandlerContext 获取一个到 ByteBufAllocator 的引用：
 
@@ -284,7 +284,7 @@ Netty 提供了两种 ByteBufAllocator 的实现：PooledByteBufAllocator 和 Un
 
 可能某些情况下，你未能获取一个到 ByteBufAllocator 的引用。对于这种情况，Netty 提供了一个简单的称为 Unpooled 的工具类，它提供了静态的辅助方法来创建未池化的 ByteBuf 实例：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605143756146.png" alt="image-20220605143756146" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605143756146.png" alt="image-20220605143756146" style="zoom:80%;" />
 
 #### 6. 引用计数
 

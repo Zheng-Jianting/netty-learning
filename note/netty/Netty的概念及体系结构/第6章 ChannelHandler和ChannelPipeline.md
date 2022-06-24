@@ -4,19 +4,19 @@
 
 #### 1.1 Channel 的生命周期
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605152209626.png" alt="image-20220605152209626" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605152209626.png" alt="image-20220605152209626" style="zoom:80%;" />
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605152227545.png" alt="image-20220605152227545" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605152227545.png" alt="image-20220605152227545" style="zoom:80%;" />
 
 Channel 的正常生命周期如下图所示，当这些状态发生改变时，将会生成对应的事件。这些事件将会被转发给 ChannelPipeline 中的 ChannelHandler，其可以随后对它们做出响应
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605152349989.png" alt="image-20220605152349989" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605152349989.png" alt="image-20220605152349989" style="zoom:80%;" />
 
 #### 1.2 ChannelHandler 的生命周期
 
 下表列出了 interface ChannelHandler 定义的生命周期操作，在 ChannelHandler 被添加到 ChannelPipeline 中或者被从 ChannelPipeline 中移除时会调用这些操作。这些方法中的每一个都接受一个 ChannelHandlerContext 参数
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605153231311.png" alt="image-20220605153231311" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605153231311.png" alt="image-20220605153231311" style="zoom:80%;" />
 
 Netty 定义了下面两个重要的 ChannelHandler 子接口：
 
@@ -27,7 +27,7 @@ Netty 定义了下面两个重要的 ChannelHandler 子接口：
 
 下表列出了 interface ChannelInboundHandler 的生命周期方法。这些方法将会在数据被接收时或者其对应的 Channel 状态发生改变时被调用
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605153808059.png" alt="image-20220605153808059" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605153808059.png" alt="image-20220605153808059" style="zoom:80%;" />
 
 当某个 ChannelInboundHandler 的实现重写 channelRead() 方法时，它将负责显式地释放与池化的 ByteBuf 实例相关的内存。Netty 提供了一个实用方法 ReferenceCountUtil.release()：
 
@@ -65,7 +65,7 @@ ChannelOutboundHandler 的一个强大的功能是可以按需推迟操作或者
 
 下表显示了所有由 ChannelOutboundHandler 本身所定义的方法 ( 忽略了那些从 ChannelHandler 继承的方法 )：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605160021600.png" alt="image-20220605160021600" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605160021600.png" alt="image-20220605160021600" style="zoom:80%;" />
 
 ```tex
 ChannelPromise 与 ChannelFuture
@@ -76,7 +76,7 @@ ChannelOutboundHandler 中的大部分方法都需要一个 ChannelPromise 参�
 
 ChannelInboundHandlerAdapter 和 ChannelOutboundHandlerAdapter 分别提供了 ChannelInboundHandler 和 ChannelOutboundHandler 的基本实现
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605160639423.png" alt="image-20220605160639423" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605160639423.png" alt="image-20220605160639423" style="zoom:80%;" />
 
 ChannelHandlerAdapter 还提供了实用方法 isSharable(). 如果其对应的实现被标注为 Sharable，那么这个方法将返回 true，表示它可以被添加到多个 ChannelPipeline 中
 
@@ -90,7 +90,7 @@ ChannelHandlerAdapter 还提供了实用方法 isSharable(). 如果其对应的�
 
 为了帮助你诊断潜在的 ( 资源泄漏 ) 问题，Netty 提供了 class ResourceLeakDetector，它将对你应用程序的缓冲区分配做大约 1% 的采样来检测内存泄漏，相关的开销是非常小的，Netty 目前定义了 4 中泄漏检测级别：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605162039602.png" alt="image-20220605162039602" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605162039602.png" alt="image-20220605162039602" style="zoom:80%;" />
 
 泄漏检测级别可以通过下面的 Java 系统属性设置为表中的一个值来定义：
 
@@ -141,7 +141,7 @@ ChannelPipeline 是一个拦截流经 Channel 的入站和出站事件的 Channe
 
 下图展示了一个典型的同时具有入站和出站 ChannelHandler 的 ChannelPipeline 的布局，如果一个入站事件被触发，它将被从 ChannelPipeline 的头部开始一直被传播到 ChannelPipeline 的尾端；一个出站 I/O 事件将从 ChannelPipeline 的最右边开始，然后向左传播
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605221754801.png" alt="image-20220605221754801" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605221754801.png" alt="image-20220605221754801" style="zoom:80%;" />
 
 ```tex
 ChannelPipeline 相对论
@@ -154,7 +154,7 @@ Netty 总是将 ChannelPipeline 的入站口作为头部, 而将出站口作为�
 
 下表展示了 ChannelPipeline 用于修改其布局的方法：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605222444800.png" alt="image-20220605222444800" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605222444800.png" alt="image-20220605222444800" style="zoom:80%;" />
 
 以下代码展示了这些方法的使用：
 
@@ -177,17 +177,17 @@ ChannelHandler 的执行和阻塞
 
 除了上述操作，还有别的通过类型或者名称来访问 ChannelHandler 的方法：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605223141692.png" alt="image-20220605223141692" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605223141692.png" alt="image-20220605223141692" style="zoom:80%;" />
 
 #### 2.2 触发事件
 
 ChannelPipeline 的 API 公开了用于调用入站和出站操作的附加方法。下表列出了入站操作，用于通知 ChannelInboundHandler 在 ChannelPipeline 中所发生的事件
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605223906572.png" alt="image-20220605223906572" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605223906572.png" alt="image-20220605223906572" style="zoom:80%;" />
 
 在出站这边，处理事件将会导致底层的套接字上发生一系列的动作，下表列出了 ChannelPipeline API 的出站操作
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605224053928.png" alt="image-20220605224053928" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605224053928.png" alt="image-20220605224053928" style="zoom:80%;" />
 
 ### 3. ChannelHandlerContext 接口
 
@@ -197,9 +197,9 @@ ChannelHandlerContext 有很多的方法，其中一些方法也存在于 Channe
 
 下表对 ChannelHandlerContext API 进行了总结：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605225349540.png" alt="image-20220605225349540" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605225349540.png" alt="image-20220605225349540" style="zoom:80%;" />
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605225412891.png" alt="image-20220605225412891" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605225412891.png" alt="image-20220605225412891" style="zoom:80%;" />
 
 当使用 ChannelHandlerContext 的 API 时，请牢记以下两点：
 
@@ -210,7 +210,7 @@ ChannelHandlerContext 有很多的方法，其中一些方法也存在于 Channe
 
 下图展示了 Channel、ChannelPipeline、ChannelHandler 以及 ChannelHandlerContext 之间的关系：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605230712497.png" alt="image-20220605230712497" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605230712497.png" alt="image-20220605230712497" style="zoom:80%;" />
 
 以下两端代码的事件流是一样的，都会导致写入事件从尾端到头部流经 ChannelPipeline
 
@@ -228,7 +228,7 @@ ChannelPipeline pipeline = ctx.pipeline();
 pipeline.write(Unpooled.copiedBuffer("Netty in Action", CharsetUtil.UTF_8));
 ```
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605231854655.png" alt="image-20220605231854655" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605231854655.png" alt="image-20220605231854655" style="zoom:80%;" />
 
 要想调用从某个特定的 ChannelHandler 开始的处理过程，必须获取到在该 ChannelHandler 之前的 ChannelHandler 所关联的 ChannelHandlerContext. 这个 ChannelHandlerContext 将调用和它所关联的 ChannelHandler 之后的 ChannelHandler
 
@@ -242,7 +242,7 @@ ctx.write(Unpooled.copiedBuffer("Netty in Action", CharsetUtil.UTF_8));
 
 如下图所示，消息将从下一个 ChannelHandler 开始流经 ChannelPipeline，绕过了所有前面的 ChannelHandler
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220605232427679.png" alt="image-20220605232427679" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220605232427679.png" alt="image-20220605232427679" style="zoom:80%;" />
 
 #### 3.2 ChannelHandler 和 ChannelHandlerContext 的高级用法
 

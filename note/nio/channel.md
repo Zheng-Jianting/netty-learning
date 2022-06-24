@@ -76,7 +76,7 @@ I/O 可以分为广义的两大类别：File I/O 和 Stream I/O，分别对应�
 
 通道通过 ByteBuffer 进行数据传输，以下是简要的相关 UML 类图：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220515164931330.png" alt="image-20220515164931330" style="zoom:67%;" />
+<img src="../../picture/nio/channel/image-20220515164931330.png" alt="image-20220515164931330" style="zoom:67%;" />
 
 ```java
 public interface ReadableByteChannel extends Channel {
@@ -190,17 +190,17 @@ public class ChannelCopy {
 
 - 对于 write 操作而言，数据是从几个缓冲区按顺序聚集 ( gather ) 并沿着通道发送的
 
-  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220515205131371.png" alt="image-20220515205131371" style="zoom:67%;" />
+  <img src="../../picture/nio/channel/image-20220515205131371.png" alt="image-20220515205131371" style="zoom:67%;" />
 
 - 对于 read 操作而言，从通道读取的数据会按顺序被分散 ( scatter ) 到多个缓冲区
 
-  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220515205157835.png" alt="image-20220515205157835" style="zoom:67%;" />
+  <img src="../../picture/nio/channel/image-20220515205157835.png" alt="image-20220515205157835" style="zoom:67%;" />
 
 大多数现代操作系统都支持本地矢量 I/O ( native vectored I/O )，Scatter / Gather 允许您委托操作系统来完成辛苦活：将读取到的数据分开存放到多个桶或者将不同的数据区块合并成一个整体，从而减少或避免了缓冲区拷贝和系统调用
 
 在之前的类图中添加 scatter / gather 接口：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220515204903966.png" alt="image-20220515204903966" style="zoom:67%;" />
+<img src="../../picture/nio/channel/image-20220515204903966.png" alt="image-20220515204903966" style="zoom:67%;" />
 
 ```java
 public interface ScatteringByteChannel extends ReadableByteChannel {
@@ -222,7 +222,7 @@ public interface GatheringByteChannel extends WritableByteChannel {
 
 _FileChannel_ 类实现了常用的 read，write 以及 scatter / gather 操作：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516003924138.png" alt="image-20220516003924138" style="zoom:67%;" />
+<img src="../../picture/nio/channel/image-20220516003924138.png" alt="image-20220516003924138" style="zoom:67%;" />
 
 _FileChannel_ 是一个反映 Java 虚拟机外部的一个具体对象的抽象，其具有以下特定：
 
@@ -234,9 +234,9 @@ _FileChannel_ 是一个反映 Java 虚拟机外部的一个具体对象的抽象
 
 每个 _FileChannel_ 对象都同一个文件描述符 ( file descriptor ) 有一对一的关系，本质上讲，_RandomAccessFile_ 类提供的是同样的抽象内容，在通道出现之前，底层的文件操作都是通过 _RandomAccessFile_ 类的方法来实现的，_FileChannel_ 模拟同样的 I/O 服务，因此它们的 API 自然是很相似的：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516005024486.png" alt="image-20220516005024486" style="zoom:80%;" />
+<img src="../../picture/nio/channel/image-20220516005024486.png" alt="image-20220516005024486" style="zoom:80%;" />
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516005045603.png" alt="image-20220516005045603" style="zoom:80%;" />
+<img src="../../picture/nio/channel/image-20220516005045603.png" alt="image-20220516005045603" style="zoom:80%;" />
 
 以下是 _FileChannel_ 的部分 API：
 
@@ -314,7 +314,7 @@ public class FileHole {
 }
 ```
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516142056960.png" alt="image-20220516142056960" style="zoom:80%;" />
+<img src="../../picture/nio/channel/image-20220516142056960.png" alt="image-20220516142056960" style="zoom:80%;" />
 
 当调用 _FileChannel_ 对象的 _read()_ 或 _write()_ 方法时，文件 position 会自动更新，如果 position 值达到了文件大小的值：
 
@@ -348,7 +348,7 @@ _FileChannel_ 类提供了 _map()_ 方法，该方法可以在一个打开的文
 
 在 _FileChannel_ 上调用 _map()_ 方法会创建一个由磁盘文件支持的虚拟内存映射 ( virtual memory mapping )，并在那块虚拟内存空间外部封装一个 _MappedByteBuffer_ 对象
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220516204127818.png" alt="image-20220516204127818" style="zoom:80%;" />
+<img src="../../picture/nio/channel/image-20220516204127818.png" alt="image-20220516204127818" style="zoom:80%;" />
 
 由 _map()_ 方法返回的 _MappedByteBuffer_ 对象的行为在多数方面类似一个基于内存的缓冲区，只不过该对象的数据元素存储在磁盘上的一个文件中：
 
@@ -611,17 +611,17 @@ socket 通道有与文件通道不同的特征：socket 通道类可以运行非
 
 - 阻塞 I/O 模型：当数据还没到达网卡，或是还没将到达网卡的数据传输至内核，进程都是阻塞的
 
-  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220518175110002.png" alt="image-20220518175110002" style="zoom:67%;" />
+  <img src="../../picture/nio/channel/image-20220518175110002.png" alt="image-20220518175110002" style="zoom:67%;" />
 
 - 非阻塞 I/O 模型：与阻塞 I/O 模型不同，当内核没有准备好数据时会直接返回给进程一个 EWOULDBLOCK 错误，一般进程都对进行轮询检查这个状态，查看内核是否准备好数据
 
   在介绍选择器时我们将了解到如何使用选择器来避免轮询并在异步连接之后收到通知，非阻塞 I/O 和可选择性是紧密相连的
 
-  <img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220518175143790.png" alt="image-20220518175143790" style="zoom:67%;" />
+  <img src="../../picture/nio/channel/image-20220518175143790.png" alt="image-20220518175143790" style="zoom:67%;" />
 
 全部 socket 通道类 ( _DatagramChannel_、_SocketChannel_、_ServerSocketChannel_ ) 都是由位于 java.nio.channels.spi 包中的 _AbstractSelectableChannel_ 引申而来，这意味着我们可以用一个 _Selector_ 对象来对准备就绪 ( 内核准备好数据 ) 的 socket 通道进行选择 ( readiness selection )
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220518231242968.png" alt="image-20220518231242968" style="zoom:67%;" />
+<img src="../../picture/nio/channel/image-20220518231242968.png" alt="image-20220518231242968" style="zoom:67%;" />
 
 注意 _DatagramChannel_ 和 _SocketChannel_ 实现定义读和写功能的接口而 _ServerSocketChannel_ 不实现，_ServerSocketChannel_ 负责监听传入的连接和创建新的 _SocketChannel_ 对象，它本身不传输数据
 
@@ -852,7 +852,7 @@ public abstract class Pipe {
 
 _Pipe_ 类创建一对提供环回机制的 _Channel_ 对象，这两个通道的远端是连接起来的，以便任何写在 _SinkChannel_ 对象上的数据都能出现在 _SourceChannel_ 对象上
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220519192424295.png" alt="image-20220519192424295" style="zoom:80%;" />
+<img src="../../picture/nio/channel/image-20220519192424295.png" alt="image-20220519192424295" style="zoom:80%;" />
 
 _Pipe_ 实例是通过调用不带参数的 _Pipe.open()_ 工厂方法来创建的，_Pipe_ 类定义了两个通道类来实现管道：_Pipe.SourceChannel_ ( 管道复杂读的一端 )，_Pipe.SinkChannel_ ( 管道负责写的一端 )，这两个通道实例是在 _Pipe_ 对象创建的同时被创建的，可以通过在 _Pipe_ 对象上分别调用 _source()_ 和 _sink()_ 方法来获取
 

@@ -24,7 +24,7 @@
 
 EventLoop 定义了 Netty 的核心抽象，用于处理连接的生命周期中所发生的事件。下图在高层次上说明了 Channel、EventLoop、Thread 以及 EventLoopGroup 之间的关系
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220601223808949.png" alt="image-20220601223808949" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220601223808949.png" alt="image-20220601223808949" style="zoom:80%;" />
 
 这些关系是：
 
@@ -62,13 +62,13 @@ ChannelHandler 安装到 ChannelPipeline 中的过程如下所示：
 
 ChannelHandler 是专为支持广泛的用途而设计的，可以将它看作是处理往来 ChannelPipeline 事件 ( 包括数据 ) 的任何代码的通用容器
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220602001416144.png" alt="image-20220602001416144" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220602001416144.png" alt="image-20220602001416144" style="zoom:80%;" />
 
 使得事件流经 ChannelPipeline 是 ChannelHandler 的工作，它们是在应用程序的初始化或者引导阶段被安装的。这些对象接收事件、执行它们所实现的处理逻辑，并将数据传递给链中的下一个 ChannelHandler. 它们的执行顺序是由它们被添加的顺序所决定的。实际上，被我们称为 ChannelPipeline 的是这些 ChannelHandler 的编排顺序
 
 入站和出站 ChannelHandler 可以被安装到同一个 ChannlePipeline 中
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220602002226957.png" alt="image-20220602002226957" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220602002226957.png" alt="image-20220602002226957" style="zoom:80%;" />
 
 如果一个消息或者任何其他的入站事件被读取，那么它会从 ChannelPipeline 的头部开始流动，并被传递给下一个 ChannelInboundHandler. 这个 ChannelHandler 不一定会实际地修改数据，具体取决于它的具体功能，在这之后，数据将会被传递给链中的下一个 ChannelInboundHandler. 最终，数据将会到达 ChannelPipeline 的尾端，届时，所有处理就都结束了
 
@@ -119,7 +119,7 @@ Netty 的引导类为应用程序的网络层配置提供了容器，这涉及�
 
 因此，有两种类型的引导：一种用于客户端 ( 简单地称为 Bootstrap )，而另一种 ( ServerBootstrap ) 用于服务器。无论你的应用程序使用哪种协议或者处理哪种类型的数据，唯一决定它使用哪种引导类的是它作为一个客户端还是作为一个服务器，下表比较了这两种类型的引导类：
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220603171533607.png" alt="image-20220603171533607" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220603171533607.png" alt="image-20220603171533607" style="zoom:80%;" />
 
 这两种类型的引导类之间的第一个区别已经讨论过了：ServerBootstrap 将绑定到一个端口，因为服务器必须要监听连接，而 Bootstrap 则是由想要连接到远程节点的客户端应用程序所使用的
 
@@ -127,6 +127,6 @@ Netty 的引导类为应用程序的网络层配置提供了容器，这涉及�
 
 因为服务器需要两组不同的 Channel. 第一组将只包含一个 ServerChannel，代表服务器自身的已绑定到某个本地端口的正在监听的套接字。而第二组将包含所有已创建的用来处理传入客户端连接 ( 对于每个服务器已经接受的连接都有一个 ) 的 Channel。下图说明了这个模型，并且展示了为何需要两个不同的 EventLoopGroup
 
-<img src="C:\Users\zjt\AppData\Roaming\Typora\typora-user-images\image-20220603173740304.png" alt="image-20220603173740304" style="zoom:80%;" />
+<img src="../../../picture/netty/Netty的概念及体系结构/image-20220603173740304.png" alt="image-20220603173740304" style="zoom:80%;" />
 
 与 ServerChannel 相关联的 EventLoopGroup 将分配一个负责为传入连接请求创建 Channel 的 EventLoop. 一旦连接被接受，第二个 EventLoopGroup 就会给它的 Channel 分配一个 EventLoop
